@@ -34,6 +34,7 @@ class TestLogger(unittest.TestCase):
     def tearDownClass(cls) -> None:
         # Cleanup temp working dir.
         for handler in cls.writer._logger.handlers:
+            handler.flush()
             handler.close()
         if cls._tmpdir is not None:
             shutil.rmtree(cls._tmpdir)
