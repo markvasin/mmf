@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+import torchvision.transforms as transforms
 from PIL import Image
 
 from mmf.common.registry import registry
@@ -146,8 +147,8 @@ class CLEVRDataset(BaseDataset):
         current_sample.targets = processed["answers_scores"]
 
         image_path = os.path.join(self.image_path, data["image_filename"])
-        image = np.true_divide(Image.open(image_path).convert("RGB"), 255)
-        image = image.astype(np.float32)
-        current_sample.image = torch.from_numpy(image.transpose(2, 0, 1))
+        image = Image.open(image_path).convert("RGB")
+        processed = self.image_processor({"image": image})
+        current_sample.image = processed["image"]
 
         return current_sample

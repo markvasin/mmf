@@ -46,6 +46,7 @@ class CLEVRBuilder(BaseDatasetBuilder):
             os.path.exists(extraction_folder)
             and len(os.listdir(extraction_folder)) != 0
         ):
+            self.writer.write("CLEVR dataset is already present. Skipping download.")
             return
 
         self.writer.write("Downloading the CLEVR dataset now")
