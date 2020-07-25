@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from typing import Type
+import wandb
 
 from mmf.utils.configuration import get_mmf_env
 from mmf.utils.distributed import is_master
@@ -219,3 +220,16 @@ class TensorboardLogger:
         for name, param in model.named_parameters():
             np_param = param.clone().cpu().data.numpy()
             self.summary_writer.add_histogram(name, np_param, iteration)
+
+
+class WandbLogger:
+    def __init__(self, project_name, note, configs):
+        wandb.init(
+            project=project_name,
+            notes=note,
+            config=configs,
+            sync_tensorboard=True
+        )
+
+    def watch(self, model):
+        wandb.watch(model)

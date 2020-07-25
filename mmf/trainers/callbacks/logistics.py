@@ -8,7 +8,7 @@ from mmf.common.registry import registry
 from mmf.trainers.callbacks.base import Callback
 from mmf.utils.configuration import get_mmf_env
 from mmf.utils.distributed import is_master
-from mmf.utils.logger import TensorboardLogger
+from mmf.utils.logger import TensorboardLogger, WandbLogger
 from mmf.utils.timer import Timer
 
 
@@ -45,9 +45,15 @@ class LogisticsCallback(Callback):
 
             self.tb_writer = TensorboardLogger(log_dir, self.trainer.current_iteration)
 
+        if self.training_config.wandb:
+            self.wandb = WandbLogger(self.config.project_name, self.training_config.experiment_name, self.config)
+
     def on_train_start(self):
         self.train_timer = Timer()
         self.snapshot_timer = Timer()
+
+        if self.training_config.wandb:
+            self.wandb.watch(self.trainer.model)
 
     def on_batch_end(self, **kwargs):
         if not kwargs["should_log"]:

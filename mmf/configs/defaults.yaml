@@ -1,6 +1,8 @@
 # Configuration version is useful in migrating older configs to new ones
 config_version: 1.0
 
+project_name: user_project
+
 # Configuration for training
 training:
     # Name of the trainer class used to define the training/evalution loop
@@ -38,6 +40,9 @@ training:
 
     # Tensorboard control, by default tensorboard is disabled
     tensorboard: false
+
+    # Wandb control, by default wandb is disable
+    wandb: false
 
     # Size of each batch. If distributed or data_parallel
     # is used, this will be divided equally among GPUs
