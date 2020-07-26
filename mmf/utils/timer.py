@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
+import math
 import time
 
 
@@ -43,6 +44,8 @@ class Timer:
         if end is None:
             end = time.time() * 1000
         if gap is None:
+            gap = end - start
+        if math.isnan(gap):
             gap = end - start
 
         s, ms = divmod(gap, 1000)
