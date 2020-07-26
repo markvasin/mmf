@@ -79,8 +79,8 @@ class LogisticsCallback(Callback):
                     self.log_interval / self.train_timer.unix_time_since_start()
                 ),
                 "time": self.train_timer.get_time_since_start(),
-                "time_since_start": self.total_timer.get_time_since_start(),
-                "eta": self._calculate_time_left(),
+                "time_since_start": self.total_timer.get_time_since_start()
+                # "eta": self._calculate_time_left(),
             }
         )
         self.train_timer.reset()
