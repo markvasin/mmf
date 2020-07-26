@@ -108,7 +108,6 @@ def run(opts: typing.Optional[typing.List[str]] = None, predict: bool = False):
             nprocs=config.distributed.world_size,
         )
     else:
-        config.device_id = 0
         main(configuration, predict=predict)
 
 

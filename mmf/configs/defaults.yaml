@@ -143,6 +143,9 @@ dataset_config: {}
 # Defines which datasets from the above tasks you want to train on
 datasets: []
 
+# Gpu device
+device_id: 0
+
 # Defines which model you want to train on
 model: null
 
