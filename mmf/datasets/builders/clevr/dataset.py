@@ -144,7 +144,7 @@ class CLEVRDataset(BaseDataset):
 
         processed = self.answer_processor({"answers": [data["answer"]]})
         current_sample.answers = processed["answers"]
-        current_sample.targets = processed["answers_scores"]
+        current_sample.targets = processed["answers_indices"][0] #processed["answers_scores"]
 
         image_path = os.path.join(self.image_path, data["image_filename"])
         image = Image.open(image_path).convert("RGB")
