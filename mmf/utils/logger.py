@@ -7,9 +7,8 @@ import logging
 import os
 import sys
 from typing import Any, Dict, Union
-from typing import Type
-import wandb
 
+import wandb
 from termcolor import colored
 
 from mmf.common.registry import registry
