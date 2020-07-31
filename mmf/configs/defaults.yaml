@@ -35,8 +35,8 @@ training:
     # Whether MMF should log or not, Default: False, which means
     # mmf will log by default
     should_not_log: false
-    # Whether to capture stdout logs by the logger. Default: True
-    stdout_capture: true
+    # Whether the colored logs should be used
+    colored_logs: true
 
     # Tensorboard control, by default tensorboard is disabled
     tensorboard: false
@@ -120,6 +120,12 @@ training:
     # By default metrics evaluation is turned off during training. Set this to true
     # to enable evaluation every log_interval
     evaluate_metrics: false
+
+    # This will enable anomaly detection mode in PyTorch. Use this for debugging
+    # purposes if you see NaN issues in your experiments.
+    # Warning: As per PyTorch docs, this usually slows down your code and should
+    # only be used for debugging purposes
+    detect_anomaly: false
 
 # Configuration for evaluation
 evaluation:
