@@ -177,7 +177,7 @@ class BaseVocab:
     def get_vectors(self):
         return getattr(self, "vectors", None)
 
-    def get_embedding(self, cls, **embedding_kwargs):
+    def get_embedding(self, cls, freeze=False, **embedding_kwargs):
         vector_dim = len(self.vectors[0])
         embedding_kwargs["vocab_size"] = self.get_size()
 
@@ -193,10 +193,10 @@ class BaseVocab:
 
         if hasattr(embedding, "embedding"):
             embedding.embedding = torch.nn.Embedding.from_pretrained(
-                self.vectors, freeze=False
+                self.vectors, freeze=freeze
             )
         else:
-            embedding = torch.nn.Embedding.from_pretrained(self.vectors, freeze=False)
+            embedding = torch.nn.Embedding.from_pretrained(self.vectors, freeze=freeze)
 
         if vector_dim == embedding_dim:
             return embedding
