@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import os
 import zipfile
@@ -11,12 +12,13 @@ from mmf.datasets.builders.clevr.dataset import CLEVRDataset
 from mmf.utils.download import download, make_dir
 from mmf.utils.general import get_mmf_root
 
+logger = logging.getLogger(__name__)
+
 
 @registry.register_builder("clevr")
 class CLEVRBuilder(BaseDatasetBuilder):
     def __init__(self):
         super().__init__("clevr")
-        self.writer = registry.get("writer")
         self.dataset_class = CLEVRDataset
 
     @classmethod
@@ -39,21 +41,20 @@ class CLEVRBuilder(BaseDatasetBuilder):
         # Either if the zip file is already present or if there are some
         # files inside the folder we don't continue download process
         if os.path.exists(local_filename):
-            self.writer.write("CLEVR dataset is already present. Skipping download.")
+            logger.info("CLEVR dataset is already present. Skipping download.")
             return
 
         if (
             os.path.exists(extraction_folder)
             and len(os.listdir(extraction_folder)) != 0
         ):
-            self.writer.write("CLEVR dataset is already present. Skipping download.")
             return
 
-        self.writer.write("Downloading the CLEVR dataset now")
+        logger.info("Downloading the CLEVR dataset now")
         make_dir(download_folder)
         download(CLEVR_DOWNLOAD_URL, download_folder, CLEVR_DOWNLOAD_URL.split("/")[-1])
 
-        self.writer.write("Downloaded. Extracting now. This can take time.")
+        logger.info("Downloaded. Extracting now. This can take time.")
         with zipfile.ZipFile(local_filename, "r") as zip_ref:
             zip_ref.extractall(download_folder)
 
