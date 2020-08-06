@@ -417,9 +417,12 @@ class Configuration:
                     current_value = current[stripped_field][array_index]
 
                     # Case where array element to be updated is last element
-                    if not isinstance(
-                        current_value,
-                        (collections.abc.Mapping, collections.abc.Sequence),
+                    if (
+                        not isinstance(
+                            current_value,
+                            (collections.abc.Mapping, collections.abc.Sequence),
+                        )
+                        or idx == len(splits) - 1
                     ):
                         logger.info(f"Overriding option {opt} to {value}")
                         current[stripped_field][array_index] = self._decode_value(value)
