@@ -297,6 +297,9 @@ class VocabProcessor(BaseProcessor):
 
             tokens = self.preprocessor({"text": item["text"]})["text"]
             indices = self._map_strings_to_indices(tokens)
+            input_mask = [1] * len(tokens)
+            while len(tokens) < self.max_length:
+                input_mask.append(0)
         else:
             raise AssertionError(
                 "A dict with either 'text' or 'tokens' keys "
@@ -304,8 +307,9 @@ class VocabProcessor(BaseProcessor):
             )
 
         tokens, length = self._pad_tokens(tokens)
+        input_mask = torch.tensor(input_mask, dtype=torch.long)
 
-        return {"text": indices, "tokens": tokens, "length": length}
+        return {"text": indices, "tokens": tokens, "length": length, 'text_mask': input_mask}
 
     def _pad_tokens(self, tokens):
         padded_tokens = [self.PAD_TOKEN] * self.max_length

@@ -78,11 +78,13 @@ class BaseVocab:
     SOS_TOKEN = "<s>"
     EOS_TOKEN = "</s>"
     UNK_TOKEN = "<unk>"
+    CLS_TOKEN = "[CLS]"
 
     PAD_INDEX = 0
     SOS_INDEX = 1
     EOS_INDEX = 2
     UNK_INDEX = 3
+    CLS_INDEX = 4
 
     def __init__(
         self, vocab_file=None, embedding_dim=300, data_dir=None, *args, **kwargs
@@ -110,11 +112,13 @@ class BaseVocab:
         self.itos[self.SOS_INDEX] = self.SOS_TOKEN
         self.itos[self.EOS_INDEX] = self.EOS_TOKEN
         self.itos[self.UNK_INDEX] = self.UNK_TOKEN
+        self.itos[self.CLS_INDEX] = self.CLS_TOKEN
 
         self.word_dict[self.SOS_TOKEN] = self.SOS_INDEX
         self.word_dict[self.EOS_TOKEN] = self.EOS_INDEX
         self.word_dict[self.PAD_TOKEN] = self.PAD_INDEX
         self.word_dict[self.UNK_TOKEN] = self.UNK_INDEX
+        self.word_dict[self.CLS_TOKEN] = self.CLS_INDEX
 
         index = len(self.itos.keys())
 
@@ -138,6 +142,7 @@ class BaseVocab:
         self.word_dict[self.EOS_TOKEN] = self.EOS_INDEX
         self.word_dict[self.PAD_TOKEN] = self.PAD_INDEX
         self.word_dict[self.UNK_TOKEN] = self.UNK_INDEX
+        self.word_dict[self.CLS_TOKEN] = self.CLS_INDEX
         # Return unk index by default
         self.stoi = defaultdict(self.get_unk_index)
         self.stoi.update(self.word_dict)
@@ -306,10 +311,10 @@ class IntersectedVocab(BaseVocab):
 
         self.embedding_dim = len(embedding.vectors[0])
 
-        for i in range(0, 4):
+        for i in range(0, 5):
             self.vectors[i] = torch.ones_like(self.vectors[i]) * 0.1 * i
 
-        for i in range(4, self.get_size()):
+        for i in range(5, self.get_size()):
             word = self.itos[i]
             embedding_index = embedding.stoi.get(word, None)
 
