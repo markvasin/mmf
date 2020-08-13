@@ -288,6 +288,9 @@ class VocabProcessor(BaseProcessor):
         if "tokens" in item:
             tokens = item["tokens"]
             indices = self._map_strings_to_indices(item["tokens"])
+            input_mask = [1] * min(len(tokens), self.max_length)
+            while len(input_mask) < self.max_length:
+                input_mask.append(0)
         elif "text" in item:
             if self.preprocessor is None:
                 raise AssertionError(

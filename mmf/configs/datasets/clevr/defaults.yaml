@@ -15,7 +15,7 @@ dataset_config:
       text_processor:
         type: vocab
         params:
-          max_length: 10
+          max_length: 30
           vocab:
             type: random
             vocab_file: vocabs/clevr_question_vocab.txt

@@ -141,6 +141,7 @@ class CLEVRDataset(BaseDataset):
         tokens = tokenize(question, keep=[";", ","], remove=["?", "."])
         processed = self.text_processor({"tokens": tokens})
         current_sample.text = processed["text"]
+        current_sample.text_mask = processed["text_mask"]
 
         processed = self.answer_processor({"answers": [data["answer"]]})
         current_sample.answers = processed["answers"]
