@@ -1,15 +1,13 @@
-import json
 import os
 
+import en_vectors_web_lg
+import glob
+import json
 import numpy as np
+import re
 import torch
-import torchvision.transforms as transforms
-from PIL import Image
-
-from mmf.common.registry import registry
 from mmf.common.sample import Sample
 from mmf.datasets.base_dataset import BaseDataset
-from mmf.utils.distributed import is_master, synchronize
 from mmf.utils.general import get_mmf_root
 from mmf.utils.text import VocabFromText, tokenize
 
@@ -23,6 +21,7 @@ _CONSTANTS = {
     "train_dataset_key": "train",
     "images_folder": "images",
     "vocabs_folder": "vocabs",
+    "features_folder": "feats"
 }
 
 _TEMPLATES = {
@@ -65,27 +64,92 @@ class CLEVRDataset(BaseDataset):
         if len(os.listdir(self._data_folder)) == 0:
             raise FileNotFoundError(_CONSTANTS["empty_folder_error"])
 
-        self.load()
-
-    def load(self):
-        self.image_path = os.path.join(
-            self._data_folder, _CONSTANTS["images_folder"], self._dataset_type
+        grid_feat_path_list = []
+        image_path = os.path.join(
+            self._data_folder, _CONSTANTS["features_folder"], self._dataset_type
         )
+        grid_feat_path_list += glob.glob(image_path + '/*.npz')
+        self.iid_to_grid_feat_path = self.img_feat_path_load(grid_feat_path_list)
 
-        with open(
-            os.path.join(
-                self._data_folder,
-                _CONSTANTS["questions_folder"],
-                _TEMPLATES["question_json_file"].format(self._dataset_type),
-            )
-        ) as f:
-            self.questions = json.load(f)[_CONSTANTS["questions_key"]]
+        self.load_questions()
 
-            # Vocab should only be built in main process, as it will repetition of same task
-            if is_master():
-                self._build_vocab(self.questions, _CONSTANTS["question_key"])
-                self._build_vocab(self.questions, _CONSTANTS["answer_key"])
-            synchronize()
+    def load_questions(self):
+        # self.image_path = os.path.join(
+        #     self._data_folder, _CONSTANTS["images_folder"], self._dataset_type
+        # )
+
+        # with open(
+        #     os.path.join(
+        #         self._data_folder,
+        #         _CONSTANTS["questions_folder"],
+        #         _TEMPLATES["question_json_file"].format(self._dataset_type),
+        #     )
+        # ) as f:
+        #     self.questions = json.load(f)[_CONSTANTS["questions_key"]]
+        #
+        #     # Vocab should only be built in main process, as it will repetition of same task
+        #     if is_master():
+        #         self._build_vocab(self.questions, _CONSTANTS["question_key"])
+        #         self._build_vocab(self.questions, _CONSTANTS["answer_key"])
+        #     synchronize()
+        question_folder = os.path.join(self._data_folder, _CONSTANTS["questions_folder"])
+        stat_ques_list = \
+            json.load(open(os.path.join(question_folder, 'train'), 'r'))['questions'] + \
+            json.load(open(os.path.join(question_folder, 'val'), 'r'))['questions'] + \
+            json.load(open(os.path.join(question_folder, 'test'), 'r'))['questions']
+
+        self.token_to_ix, self.pretrained_emb, max_token = self.tokenize(stat_ques_list, use_glove=True)
+        self.token_size = self.token_to_ix.__len__()
+        print(' ========== Question token vocab size:', self.token_size)
+        self.max_token = max_token
+        print('Max token length:', max_token, 'Trimmed to:', self.max_token)
+
+        self.ques_list = []
+        self.ques_list += json.load(open(os.path.join(question_folder, self._dataset_type, 'r')))['questions']
+
+        stat_ans_list = \
+            json.load(open(os.path.join(question_folder, 'train'), 'r'))['questions'] + \
+            json.load(open(os.path.join(question_folder, 'val'), 'r'))['questions']
+        self.ans_to_ix, self.ix_to_ans = self.ans_stat(stat_ans_list)
+        self.ans_size = self.ans_to_ix.__len__()
+        print(' ========== Answer token vocab size:', self.ans_size)
+        print('Finished!')
+
+    def tokenize(self, stat_ques_list, use_glove):
+        token_to_ix = {
+            'PAD': 0,
+            'UNK': 1,
+            'CLS': 2,
+        }
+
+        spacy_tool = None
+        pretrained_emb = []
+        if use_glove:
+            spacy_tool = en_vectors_web_lg.load()
+            pretrained_emb.append(spacy_tool('PAD').vector)
+            pretrained_emb.append(spacy_tool('UNK').vector)
+            pretrained_emb.append(spacy_tool('CLS').vector)
+
+        max_token = 0
+        for ques in stat_ques_list:
+            words = re.sub(
+                r"([.,'!?\"()*#:;])",
+                '',
+                ques['question'].lower()
+            ).replace('-', ' ').replace('/', ' ').split()
+
+            if len(words) > max_token:
+                max_token = len(words)
+
+            for word in words:
+                if word not in token_to_ix:
+                    token_to_ix[word] = len(token_to_ix)
+                    if use_glove:
+                        pretrained_emb.append(spacy_tool(word).vector)
+
+        pretrained_emb = np.array(pretrained_emb)
+
+        return token_to_ix, pretrained_emb, max_token
 
     def __len__(self):
         return len(self.questions)
@@ -130,26 +194,97 @@ class CLEVRDataset(BaseDataset):
             f.write("\n".join(vocab.word_list))
 
     def __getitem__(self, idx):
-        data = self.questions[idx]
+        ques_ix_iter, ans_iter, iid = self.load_ques_ans(idx)
 
         # Each call to __getitem__ from dataloader returns a Sample class object which
         # collated by our special batch collator to a SampleList which is basically
         # a attribute based batch in layman terms
         current_sample = Sample()
+        torch.from_numpy(ques_ix_iter)
 
-        question = data["question"]
-        tokens = tokenize(question, keep=[";", ","], remove=["?", "."])
-        processed = self.text_processor({"tokens": tokens})
-        current_sample.text = processed["text"]
-        current_sample.text_mask = processed["text_mask"]
+        # question = data["question"]
+        # tokens = tokenize(question, keep=[";", ","], remove=["?", "."])
+        # processed = self.text_processor({"tokens": tokens})
+        current_sample.text = torch.from_numpy(ques_ix_iter)
+        # current_sample.text_mask = processed["text_mask"]
 
-        processed = self.answer_processor({"answers": [data["answer"]]})
-        current_sample.answers = processed["answers"]
-        current_sample.targets = processed["answers_scores"] # processed["answers_indices"][0]
+        # processed = self.answer_processor({"answers": [data["answer"]]})
+        # current_sample.answers = processed["answers"]
+        current_sample.targets = torch.from_numpy(ans_iter)  # processed["answers_indices"][0]
 
-        image_path = os.path.join(self.image_path, data["image_filename"])
-        image = Image.open(image_path).convert("RGB")
-        processed = self.image_processor({"image": image})
-        current_sample.image = processed["image"]
+        # image_path = os.path.join(self.image_path, data["image_filename"])
+        # image = Image.open(image_path).convert("RGB")
+        # processed = self.image_processor({"image": image})
+        current_sample.image = torch.from_numpy(self.load_img_feats(idx, iid))
 
         return current_sample
+
+    def load_img_feats(self, idx, iid):
+        grid_feat = np.load(self.iid_to_grid_feat_path[iid])
+        grid_feat_iter = grid_feat['x']
+
+        return grid_feat_iter
+
+    def img_feat_path_load(self, path_list):
+        iid_to_path = {}
+
+        for ix, path in enumerate(path_list):
+            iid = path.split('/')[-1].split('.')[0]
+            iid_to_path[iid] = path
+
+        return iid_to_path
+
+    def load_ques_ans(self, idx):
+        # if self.__C.RUN_MODE in ['train']:
+        ques = self.ques_list[idx]
+        iid = str(ques['image_index'])
+
+        # Process question
+        ques_ix_iter = self.proc_ques(ques, self.token_to_ix, max_token=self.max_token)
+        ans_iter = np.zeros(1)
+
+        # if self.__C.RUN_MODE in ['train']:
+        # process answers
+        ans = ques['answer']
+        ans_iter = self.proc_ans(ans, self.ans_to_ix)
+
+        return ques_ix_iter, ans_iter, iid
+
+    def proc_ques(self, ques, token_to_ix, max_token):
+        ques_ix = np.zeros(max_token, np.int64)
+
+        words = re.sub(
+            r"([.,'!?\"()*#:;])",
+            '',
+            ques['question'].lower()
+        ).replace('-', ' ').replace('/', ' ').split()
+
+        for ix, word in enumerate(words):
+            if word in token_to_ix:
+                ques_ix[ix] = token_to_ix[word]
+            else:
+                ques_ix[ix] = token_to_ix['UNK']
+
+            if ix + 1 == max_token:
+                break
+
+        return ques_ix
+
+    def ans_stat(self, stat_ans_list):
+        ans_to_ix = {}
+        ix_to_ans = {}
+
+        for ans_stat in stat_ans_list:
+            ans = ans_stat['answer']
+
+            if ans not in ans_to_ix:
+                ix_to_ans[ans_to_ix.__len__()] = ans
+                ans_to_ix[ans] = ans_to_ix.__len__()
+
+        return ans_to_ix, ix_to_ans
+
+    def proc_ans(self, ans, ans_to_ix):
+        ans_ix = np.zeros(1, np.int64)
+        ans_ix[0] = ans_to_ix[ans]
+
+        return ans_ix
