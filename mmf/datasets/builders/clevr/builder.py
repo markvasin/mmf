@@ -62,12 +62,12 @@ class CLEVRBuilder(BaseDatasetBuilder):
         self.dataset = CLEVRDataset(config, dataset_type, data_folder=self.data_folder)
         return self.dataset
 
-    def update_registry_for_model(self, config):
-        registry.register(
-            self.dataset_name + "_text_vocab_size",
-            self.dataset.text_processor.get_vocab_size(),
-        )
-        registry.register(
-            self.dataset_name + "_num_final_outputs",
-            self.dataset.answer_processor.get_vocab_size(),
-        )
+    # def update_registry_for_model(self, config):
+    #     registry.register(
+    #         self.dataset_name + "_text_vocab_size",
+    #         self.dataset.text_processor.get_vocab_size(),
+    #     )
+    #     registry.register(
+    #         self.dataset_name + "_num_final_outputs",
+    #         self.dataset.answer_processor.get_vocab_size(),
+    #     )

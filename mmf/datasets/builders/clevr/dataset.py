@@ -6,6 +6,7 @@ import json
 import numpy as np
 import re
 import torch
+from mmf.common import registry
 from mmf.common.sample import Sample
 from mmf.datasets.base_dataset import BaseDataset
 from mmf.utils.general import get_mmf_root
@@ -31,18 +32,88 @@ _TEMPLATES = {
 }
 
 
+def clevr_tokenize(stat_ques_list, use_glove):
+    token_to_ix = {
+        'PAD': 0,
+        'UNK': 1,
+        'CLS': 2,
+    }
+
+    spacy_tool = None
+    pretrained_emb = []
+    if use_glove:
+        spacy_tool = en_vectors_web_lg.load()
+        pretrained_emb.append(spacy_tool('PAD').vector)
+        pretrained_emb.append(spacy_tool('UNK').vector)
+        pretrained_emb.append(spacy_tool('CLS').vector)
+
+    max_token = 0
+    for ques in stat_ques_list:
+        words = re.sub(
+            r"([.,'!?\"()*#:;])",
+            '',
+            ques['question'].lower()
+        ).replace('-', ' ').replace('/', ' ').split()
+
+        if len(words) > max_token:
+            max_token = len(words)
+
+        for word in words:
+            if word not in token_to_ix:
+                token_to_ix[word] = len(token_to_ix)
+                if use_glove:
+                    pretrained_emb.append(spacy_tool(word).vector)
+
+    pretrained_emb = np.array(pretrained_emb)
+    del spacy_tool
+    return token_to_ix, pretrained_emb, max_token
+
+
+def ans_stat(stat_ans_list):
+    ans_to_ix = {}
+    ix_to_ans = {}
+
+    for ans_stat in stat_ans_list:
+        ans = ans_stat['answer']
+
+        if ans not in ans_to_ix:
+            ix_to_ans[ans_to_ix.__len__()] = ans
+            ans_to_ix[ans] = ans_to_ix.__len__()
+
+    return ans_to_ix, ix_to_ans
+
+
 class CLEVRDataset(BaseDataset):
-    """Dataset for CLEVR. CLEVR is a reasoning task where given an image with some
-    3D shapes you have to answer basic questions.
+    question_folder = os.path.join('/home/mark/.cache/torch/mmf/data/CLEVR_v1.0/CLEVR_v1.0',
+                                   _CONSTANTS["questions_folder"])
+    stat_ques_list = \
+        json.load(open(os.path.join(question_folder, _TEMPLATES["question_json_file"].format('train')), 'r'))[
+            'questions'] + \
+        json.load(open(os.path.join(question_folder, _TEMPLATES["question_json_file"].format('val')), 'r'))[
+            'questions'] + \
+        json.load(open(os.path.join(question_folder, _TEMPLATES["question_json_file"].format('test')), 'r'))[
+            'questions']
 
-    Args:
-        dataset_type (str): type of dataset, train|val|test
-        config (DictConfig): Configuration Node representing all of the data necessary
-                             to initialize CLEVR dataset class
-        data_folder: Root folder in which all of the data will be present if passed
-                     replaces default based on data_dir and data_folder in config.
+    token_to_ix, pretrained_emb, max_token = clevr_tokenize(stat_ques_list, use_glove=True)
+    token_size = token_to_ix.__len__()
+    print(' ========== Question token vocab size:', token_size)
+    max_token = max_token
+    print('Max token length:', max_token, 'Trimmed to:', max_token)
 
-    """
+    stat_ans_list = \
+        json.load(open(os.path.join(question_folder, _TEMPLATES["question_json_file"].format('train')), 'r'))[
+            'questions'] + \
+        json.load(open(os.path.join(question_folder, _TEMPLATES["question_json_file"].format('val')), 'r'))[
+            'questions']
+
+    ans_to_ix, ix_to_ans = ans_stat(stat_ans_list)
+    ans_size = ans_to_ix.__len__()
+    print(' ========== Answer token vocab size:', ans_size)
+    print('Finished!')
+    del stat_ques_list
+    del stat_ans_list
+    # registry.register('clevr_word_embedding', pretrained_emb)
+    # registry.register('clevr_token_to_index', token_to_ix)
 
     def __init__(self, config, dataset_type, data_folder=None, *args, **kwargs):
         super().__init__(_CONSTANTS["dataset_key"], config, dataset_type)
@@ -74,85 +145,17 @@ class CLEVRDataset(BaseDataset):
         self.load_questions()
 
     def load_questions(self):
-        # self.image_path = os.path.join(
-        #     self._data_folder, _CONSTANTS["images_folder"], self._dataset_type
-        # )
-
-        # with open(
-        #     os.path.join(
-        #         self._data_folder,
-        #         _CONSTANTS["questions_folder"],
-        #         _TEMPLATES["question_json_file"].format(self._dataset_type),
-        #     )
-        # ) as f:
-        #     self.questions = json.load(f)[_CONSTANTS["questions_key"]]
-        #
-        #     # Vocab should only be built in main process, as it will repetition of same task
-        #     if is_master():
-        #         self._build_vocab(self.questions, _CONSTANTS["question_key"])
-        #         self._build_vocab(self.questions, _CONSTANTS["answer_key"])
-        #     synchronize()
-        question_folder = os.path.join(self._data_folder, _CONSTANTS["questions_folder"])
-        stat_ques_list = \
-            json.load(open(os.path.join(question_folder, 'train'), 'r'))['questions'] + \
-            json.load(open(os.path.join(question_folder, 'val'), 'r'))['questions'] + \
-            json.load(open(os.path.join(question_folder, 'test'), 'r'))['questions']
-
-        self.token_to_ix, self.pretrained_emb, max_token = self.tokenize(stat_ques_list, use_glove=True)
-        self.token_size = self.token_to_ix.__len__()
-        print(' ========== Question token vocab size:', self.token_size)
-        self.max_token = max_token
-        print('Max token length:', max_token, 'Trimmed to:', self.max_token)
-
+        question_folder = os.path.join('/home/mark/.cache/torch/mmf/data/CLEVR_v1.0/CLEVR_v1.0',
+                                       _CONSTANTS["questions_folder"])
         self.ques_list = []
-        self.ques_list += json.load(open(os.path.join(question_folder, self._dataset_type, 'r')))['questions']
+        self.ques_list += json.load(
+            open(os.path.join(question_folder, _TEMPLATES["question_json_file"].format(self._dataset_type)), 'r'))[
+            'questions']
 
-        stat_ans_list = \
-            json.load(open(os.path.join(question_folder, 'train'), 'r'))['questions'] + \
-            json.load(open(os.path.join(question_folder, 'val'), 'r'))['questions']
-        self.ans_to_ix, self.ix_to_ans = self.ans_stat(stat_ans_list)
-        self.ans_size = self.ans_to_ix.__len__()
-        print(' ========== Answer token vocab size:', self.ans_size)
-        print('Finished!')
-
-    def tokenize(self, stat_ques_list, use_glove):
-        token_to_ix = {
-            'PAD': 0,
-            'UNK': 1,
-            'CLS': 2,
-        }
-
-        spacy_tool = None
-        pretrained_emb = []
-        if use_glove:
-            spacy_tool = en_vectors_web_lg.load()
-            pretrained_emb.append(spacy_tool('PAD').vector)
-            pretrained_emb.append(spacy_tool('UNK').vector)
-            pretrained_emb.append(spacy_tool('CLS').vector)
-
-        max_token = 0
-        for ques in stat_ques_list:
-            words = re.sub(
-                r"([.,'!?\"()*#:;])",
-                '',
-                ques['question'].lower()
-            ).replace('-', ' ').replace('/', ' ').split()
-
-            if len(words) > max_token:
-                max_token = len(words)
-
-            for word in words:
-                if word not in token_to_ix:
-                    token_to_ix[word] = len(token_to_ix)
-                    if use_glove:
-                        pretrained_emb.append(spacy_tool(word).vector)
-
-        pretrained_emb = np.array(pretrained_emb)
-
-        return token_to_ix, pretrained_emb, max_token
+        self.data_size = self.ques_list.__len__()
 
     def __len__(self):
-        return len(self.questions)
+        return self.data_size
 
     def _get_vocab_path(self, attribute):
         return os.path.join(
@@ -194,7 +197,7 @@ class CLEVRDataset(BaseDataset):
             f.write("\n".join(vocab.word_list))
 
     def __getitem__(self, idx):
-        ques_ix_iter, ans_iter, iid = self.load_ques_ans(idx)
+        ques_ix_iter, ans_iter, iid, ques_mask = self.load_ques_ans(idx)
 
         # Each call to __getitem__ from dataloader returns a Sample class object which
         # collated by our special batch collator to a SampleList which is basically
@@ -206,7 +209,7 @@ class CLEVRDataset(BaseDataset):
         # tokens = tokenize(question, keep=[";", ","], remove=["?", "."])
         # processed = self.text_processor({"tokens": tokens})
         current_sample.text = torch.from_numpy(ques_ix_iter)
-        # current_sample.text_mask = processed["text_mask"]
+        current_sample.text_mask = torch.tensor(ques_mask, dtype=torch.long)
 
         # processed = self.answer_processor({"answers": [data["answer"]]})
         # current_sample.answers = processed["answers"]
@@ -240,7 +243,7 @@ class CLEVRDataset(BaseDataset):
         iid = str(ques['image_index'])
 
         # Process question
-        ques_ix_iter = self.proc_ques(ques, self.token_to_ix, max_token=self.max_token)
+        ques_ix_iter, ques_mask = self.proc_ques(ques, self.token_to_ix, max_token=self.max_token)
         ans_iter = np.zeros(1)
 
         # if self.__C.RUN_MODE in ['train']:
@@ -248,7 +251,7 @@ class CLEVRDataset(BaseDataset):
         ans = ques['answer']
         ans_iter = self.proc_ans(ans, self.ans_to_ix)
 
-        return ques_ix_iter, ans_iter, iid
+        return ques_ix_iter, ans_iter, iid, ques_mask
 
     def proc_ques(self, ques, token_to_ix, max_token):
         ques_ix = np.zeros(max_token, np.int64)
@@ -268,20 +271,10 @@ class CLEVRDataset(BaseDataset):
             if ix + 1 == max_token:
                 break
 
-        return ques_ix
-
-    def ans_stat(self, stat_ans_list):
-        ans_to_ix = {}
-        ix_to_ans = {}
-
-        for ans_stat in stat_ans_list:
-            ans = ans_stat['answer']
-
-            if ans not in ans_to_ix:
-                ix_to_ans[ans_to_ix.__len__()] = ans
-                ans_to_ix[ans] = ans_to_ix.__len__()
-
-        return ans_to_ix, ix_to_ans
+        input_mask = [1] * min(len(words), max_token)
+        while len(input_mask) < max_token:
+            input_mask.append(0)
+        return ques_ix, input_mask
 
     def proc_ans(self, ans, ans_to_ix):
         ans_ix = np.zeros(1, np.int64)

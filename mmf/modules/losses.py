@@ -556,7 +556,7 @@ class CrossEntropyLoss(nn.Module):
         super().__init__()
         if params is None:
             params = {}
-        self.loss_fn = nn.CrossEntropyLoss(**params)
+        self.loss_fn = nn.CrossEntropyLoss(reduction='sum')
 
     def forward(self, sample_list, model_output):
-        return self.loss_fn(model_output["scores"], sample_list.targets)
+        return self.loss_fn(model_output["scores"], sample_list.targets.squeeze())
