@@ -206,7 +206,7 @@ class Accuracy(BaseMetric):
         if expected.dim() == 2 and expected.size(-1) != 1:
             expected = torch.max(expected, 1)[1]
 
-        correct = (expected == output.squeeze()).sum().float()
+        correct = (expected.squeeze() == output.squeeze()).sum().float()
         total = len(expected)
 
         value = correct / total
