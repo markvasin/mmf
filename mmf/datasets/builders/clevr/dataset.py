@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 
@@ -23,6 +24,7 @@ _CONSTANTS = {
     "train_dataset_key": "train",
     "images_folder": "images",
     "vocabs_folder": "vocabs",
+    "features_folder": "feats"
 }
 
 _TEMPLATES = {
@@ -64,6 +66,13 @@ class CLEVRDataset(BaseDataset):
 
         if len(os.listdir(self._data_folder)) == 0:
             raise FileNotFoundError(_CONSTANTS["empty_folder_error"])
+
+        grid_feat_path_list = []
+        image_path = os.path.join(
+            self._data_folder, _CONSTANTS["features_folder"], self._dataset_type
+        )
+        grid_feat_path_list += glob.glob(image_path + '/*.npz')
+        self.iid_to_grid_feat_path = self.img_feat_path_load(grid_feat_path_list)
 
         self.load()
 
@@ -141,15 +150,33 @@ class CLEVRDataset(BaseDataset):
         tokens = tokenize(question, keep=[";", ","], remove=["?", "."])
         processed = self.text_processor({"tokens": tokens})
         current_sample.text = processed["text"]
-        current_sample.text_mask = processed["text_mask"]
+        # current_sample.text_mask = processed["text_mask"]
+        if "input_ids" in processed:
+            current_sample.update(processed)
 
         processed = self.answer_processor({"answers": [data["answer"]]})
         current_sample.answers = processed["answers"]
-        current_sample.targets = processed["answers_scores"] # processed["answers_indices"][0]
+        current_sample.targets = processed["answers_scores"]  # processed["answers_indices"][0]
 
-        image_path = os.path.join(self.image_path, data["image_filename"])
-        image = Image.open(image_path).convert("RGB")
-        processed = self.image_processor({"image": image})
-        current_sample.image = processed["image"]
+        # image_path = os.path.join(self.image_path, data["image_filename"])
+        # image = Image.open(image_path).convert("RGB")
+        # processed = self.image_processor({"image": image})
+        # current_sample.image = processed["image"]
+        current_sample.img_feature = torch.from_numpy(self.load_img_feats(idx, str(data["image_index"])))
 
         return current_sample
+
+    def load_img_feats(self, idx, iid):
+        grid_feat = np.load(self.iid_to_grid_feat_path[iid])
+        grid_feat_iter = grid_feat['x']
+
+        return grid_feat_iter
+
+    def img_feat_path_load(self, path_list):
+        iid_to_path = {}
+
+        for ix, path in enumerate(path_list):
+            iid = path.split('/')[-1].split('.')[0]
+            iid_to_path[iid] = path
+
+        return iid_to_path
